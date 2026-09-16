@@ -11,3 +11,19 @@ test('long context uses the entire request and known tier',()=>{const result=est
 test('missing context and missing cache information are unknown',()=>{assert.equal(estimateAgentCost(agent([{...sample,inputTokens:300000,requestInputTokens:undefined}])).usd,null);assert.equal(estimateAgentCost(agent([{...sample,cacheReadTokens:undefined}])).usd,null);});
 test('Anthropic cache writes require TTL split and use distinct rates',()=>{const usage={...sample,model:'claude-sonnet-5',cacheReadTokens:50000,cacheWriteTokens:20000,cacheWrite5mTokens:10000,cacheWrite1hTokens:10000};assert.equal(estimateAgentCost(agent([usage])).usd,.235);assert.equal(estimateAgentCost(agent([{...usage,cacheWrite1hTokens:undefined}])).usd,null);});
 test('unattributed and excessive buckets do not yield full prices',()=>{const a=agent([sample]);a.stats.inputTokens++;assert.equal(estimateAgentCost(a).complete,false);a.stats.inputTokens-=2;assert.equal(estimateAgentCost(a).knownUsd,0);});
+test('per-model rows aggregate across agents and sum to the agent estimates',async()=>{
+  const {estimateModelCosts,UNATTRIBUTED_MODEL}=await import('../src/shared/pricing');
+  const luna={...sample,model:'gpt-5.6-luna'};
+  const first={...agent([sample,luna]),id:'first'};
+  const second={...agent([luna,{...sample,model:'codex-auto-review'}]),id:'second'};
+  second.stats={...second.stats,inputTokens:second.stats.inputTokens+500};
+  const rows=estimateModelCosts([first,second]);
+  assert.deepEqual(rows.map(row=>[row.model,row.agents]),[['gpt-6-astra',1],['gpt-5.6-luna',2],['codex-auto-review',1],[UNATTRIBUTED_MODEL,1]]);
+  const lunaRow=rows.find(row=>row.model==='gpt-5.6-luna')!;
+  assert.equal(lunaRow.inputTokens,200000); assert.equal(lunaRow.cacheReadTokens,160000); assert.equal(lunaRow.complete,true);
+  assert.deepEqual(lunaRow.rate,{input:.2,output:1.2});
+  assert.equal(rows.find(row=>row.model===UNATTRIBUTED_MODEL)!.unpricedTokens,500);
+  const known=rows.reduce((sum,row)=>sum+row.knownUsd,0);
+  const expected=estimateAgentCost(first).knownUsd+estimateAgentCost(second).knownUsd;
+  assert.ok(Math.abs(known-expected)<1e-12);
+});

@@ -289,3 +289,34 @@ export function filterConversationGroups(groups: readonly ConversationGroup[], s
   return groups.filter((group) => conversationGroupMatchesKind(group, kind)
     && (!query || conversationSearchText(group).includes(query)));
 }
+
+function blockEntries(block: ConversationBlock): TraceEntryDetails[] {
+  if (block.type === 'tools') return block.tools.flatMap(({ call, result }) => result ? [call, result] : [call]);
+  return [block.entry];
+}
+
+/**
+ * Latest request's token usage inside a card. Structured per-request counts
+ * win over the display text, which can be a running session total.
+ */
+export function conversationUsage(group: ConversationGroup) {
+  for (let index = group.blocks.length - 1; index >= 0; index -= 1) {
+    const block = group.blocks[index];
+    if (block.type !== 'usage') continue;
+    if (block.entry.usage) return { ...block.entry.usage };
+    const match = block.entry.text.match(/([\d,]+)\s*input\D+([\d,]+)\s*output/i);
+    if (match) return { input: Number(match[1].replace(/,/g, '')), output: Number(match[2].replace(/,/g, '')) };
+  }
+  return undefined;
+}
+
+/** Milliseconds between the first and last timestamped entry in a card. */
+export function conversationDuration(group: ConversationGroup) {
+  const times = group.blocks.flatMap(blockEntries)
+    .map((entry) => entry.timestamp)
+    .filter((time): time is number => typeof time === 'number' && Number.isFinite(time));
+  if (times.length < 2) return undefined;
+  const span = Math.max(...times) - Math.min(...times);
+  return span > 0 ? span : undefined;
+}
+

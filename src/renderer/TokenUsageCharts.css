@@ -7,11 +7,14 @@
 .token-charts small { display:block; margin-top:4px; font-size:10px; font-weight:400; color:var(--muted); }
 .token-charts svg { width:100%; overflow:visible; margin-top:14px; }
 .token-charts svg text { fill:var(--muted); font-size:10px; }
-.token-chart__axis { fill:none; stroke:var(--border); }
+.token-chart__axis { fill:none; stroke:var(--border-strong); }
+.token-chart__grid { stroke:var(--border-subtle); stroke-dasharray:3 4; }
+.token-charts svg .token-chart__title { fill:var(--dim); font-weight:500; }
 .token-chart__input,.token-chart__output { fill:none; stroke:var(--accent); stroke-width:2; }
 .token-chart__output { stroke:var(--purple); }
 .token-chart__point { fill:var(--muted); }
-.token-charts__legend { display:flex; gap:14px; font-size:10px; color:var(--muted); }
+.token-charts__legend { display:flex; gap:14px; margin-top:8px; font-size:10px; color:var(--muted); }
+.token-charts__legend span:first-child::before,.token-charts__legend span:nth-child(2)::before { display:inline-block; width:12px; height:2px; margin:0 6px 3px 0; border-radius:1px; background:currentColor; vertical-align:middle; content:''; }
 .token-charts__legend span:first-child { color:var(--accent); }
 .token-charts__legend span:nth-child(2) { color:var(--purple); }
 .token-charts__caption,.token-charts__empty { color:var(--muted); font-size:11px; line-height:1.5; margin:14px 0 0; }

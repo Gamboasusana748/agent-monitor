@@ -418,7 +418,14 @@ export class CodexAdapter {
             : lastValues.input !== undefined || lastValues.output !== undefined
               ? `Usage: ${lastValues.input ?? 0} input · ${lastValues.output ?? 0} output`
               : '';
-          if (usageText) addEntry(entries, entryFor(record, 'usage', usageText, lineTimestamp));
+          if (usageText) {
+            const entry = entryFor(record, 'usage', usageText, lineTimestamp);
+            // The text may be a running total; keep this request's own counts separately.
+            if (lastValues.input !== undefined || lastValues.output !== undefined) {
+              entry.usage = { input: lastValues.input ?? 0, output: lastValues.output ?? 0 };
+            }
+            addEntry(entries, entry);
+          }
           lastRecordWasMeaningful = !!usageText;
           continue;
         }

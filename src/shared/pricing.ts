@@ -69,3 +69,81 @@ export function estimateAgentCost(agent:Agent):CostEstimate {
   const complete=unpricedTokens===0;
   return {usd:complete?knownUsd:null,knownUsd,complete,unpricedTokens,notes:[...notes]};
 }
+
+export interface ModelCostRow {
+  model: string;
+  agents: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  knownUsd: number;
+  unpricedTokens: number;
+  /** Every token in this row has a verified price. */
+  complete: boolean;
+  /** List price in USD per 1M tokens, when the model has a verified rate. */
+  rate?: { input: number; output: number };
+  notes: string[];
+}
+
+/** Label for tokens an agent recorded without a model/cache bucket. */
+export const UNATTRIBUTED_MODEL = 'Unattributed';
+
+/**
+ * Aggregates token usage and API token-value estimates per model across agents,
+ * applying the same rules as `estimateAgentCost` so the rows sum to the run total.
+ */
+export function estimateModelCosts(agents: readonly Agent[]): ModelCostRow[] {
+  const rows = new Map<string, ModelCostRow & { agentIds: Set<string> }>();
+  const rowFor = (model: string) => {
+    let row = rows.get(model);
+    if (!row) {
+      const rate = rates[model];
+      row = { model, agents: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, knownUsd: 0, unpricedTokens: 0, complete: true, notes: [], agentIds: new Set(),
+        ...(rate ? { rate: { input: rate.input, output: rate.output } } : {}) };
+      rows.set(model, row);
+    }
+    return row;
+  };
+  for (const agent of agents) {
+    const usages = agent.tokenUsage ?? [];
+    const coveredInput = usages.reduce((sum, usage) => sum + usage.inputTokens, 0);
+    const coveredOutput = usages.reduce((sum, usage) => sum + usage.outputTokens, 0);
+    const exceeds = coveredInput > agent.stats.inputTokens || coveredOutput > agent.stats.outputTokens;
+    if (exceeds) {
+      // Matches estimateAgentCost: inconsistent buckets are never priced.
+      const row = rowFor(UNATTRIBUTED_MODEL);
+      row.agentIds.add(agent.id);
+      row.inputTokens += agent.stats.inputTokens;
+      row.outputTokens += agent.stats.outputTokens;
+      row.unpricedTokens += agent.stats.inputTokens + agent.stats.outputTokens;
+      row.notes.push('Usage buckets exceed the recorded total.');
+      continue;
+    }
+    for (const usage of usages) {
+      const row = rowFor(usage.model || UNATTRIBUTED_MODEL);
+      row.agentIds.add(agent.id);
+      row.inputTokens += usage.inputTokens;
+      row.outputTokens += usage.outputTokens;
+      row.cacheReadTokens += usage.cacheReadTokens ?? 0;
+      const result = priceUsage(usage);
+      if (result.usd === null) {
+        row.unpricedTokens += usage.inputTokens + usage.outputTokens;
+        if (result.note) row.notes.push(result.note);
+      } else row.knownUsd += result.usd;
+    }
+    const missingInput = Math.max(0, agent.stats.inputTokens - coveredInput);
+    const missingOutput = Math.max(0, agent.stats.outputTokens - coveredOutput);
+    if (missingInput || missingOutput) {
+      const row = rowFor(UNATTRIBUTED_MODEL);
+      row.agentIds.add(agent.id);
+      row.inputTokens += missingInput;
+      row.outputTokens += missingOutput;
+      row.unpricedTokens += missingInput + missingOutput;
+      row.notes.push('Some tokens have no model/cache attribution.');
+    }
+  }
+  return [...rows.values()]
+    .map(({ agentIds, ...row }) => ({ ...row, agents: agentIds.size, complete: row.unpricedTokens === 0, notes: [...new Set(row.notes)] }))
+    .filter((row) => row.inputTokens + row.outputTokens > 0)
+    .sort((a, b) => b.knownUsd - a.knownUsd || (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens) || a.model.localeCompare(b.model));
+}

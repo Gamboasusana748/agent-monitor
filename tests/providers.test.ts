@@ -255,3 +255,18 @@ test('provider detection rejects weak generic records', () => {
   assert.equal(createPiSession({ type: 'session', id: 'generic' }, '/tmp/app.log'), null);
   assert.equal(createPiSession({ type: 'message', message: { role: 'assistant', content: 'hello' } }, '/tmp/app.log'), null);
 });
+
+test('Codex usage entries keep per-request counts beside the running total', () => {
+  const values = [
+    { type: 'session_meta', timestamp: '2026-01-01T00:00:00Z', payload: { id: 'usage-session', cwd: '/tmp' } },
+    { type: 'event_msg', timestamp: '2026-01-01T00:00:05Z', payload: { type: 'token_count', info: {
+      last_token_usage: { input_tokens: 162332, output_tokens: 39 },
+      total_token_usage: { input_tokens: 5000000, output_tokens: 9000 },
+    } } },
+  ];
+  const observation = new CodexAdapter().inspect(values.map((value, index) => ({ value, index })), { tracePath: '/tmp/usage.jsonl' });
+  const usage = observation?.entries.find((entry) => entry.kind === 'usage');
+  assert(usage);
+  assert.equal(usage.text, 'Usage: 5000000 input · 9000 output');
+  assert.deepEqual(usage.usage, { input: 162332, output: 39 });
+});

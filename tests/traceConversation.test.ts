@@ -115,3 +115,17 @@ test('cumulative thinking updates collapse without merging distinct steps or cro
   const turns=groupTraceEntries([entry('thinking','Same',{turnId:'a'}),entry('thinking','Same longer',{turnId:'b'})]);
   assert.equal(turns.length,2);
 });
+
+test('reports the latest usage and time span for a conversation card', async () => {
+  const { conversationDuration, conversationUsage } = await import('../src/renderer/traceConversation');
+  const [group] = groupTraceEntries([
+    entry('assistant', 'Working', { timestamp: 1_000 }),
+    entry('usage', 'Usage: 100 input · 5 output', { timestamp: 1_500 }),
+    entry('tool-call', 'exec: ls', { callId: 'call-span', toolName: 'exec', timestamp: 2_000 }),
+    entry('usage', 'Usage: 162332 input · 39 output', { timestamp: 2_500 }),
+    entry('tool-result', 'done', { callId: 'call-span', timestamp: 27_944 }),
+  ]);
+  assert.deepEqual(conversationUsage(group), { input: 162332, output: 39 });
+  assert.equal(conversationDuration(group), 26_944);
+  assert.equal(conversationDuration(groupTraceEntries([entry('assistant', 'Alone')])[0]), undefined);
+});

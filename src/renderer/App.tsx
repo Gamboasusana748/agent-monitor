@@ -397,6 +397,7 @@ type AgentNodeData = {
   agent: Agent;
   pulse: boolean;
   arrived: boolean;
+  onOpenTrace?: (agent: Agent) => void;
 };
 
 type AgentFlowNode = Node<AgentNodeData, 'agent'>;
@@ -404,6 +405,12 @@ type SpawnFlowEdge = Edge<{ status: AgentEdge['status']; active: boolean }, 'spa
 
 const NODE_WIDTH = 310;
 const NODE_HEIGHT = 230;
+/** Automatic framing never zooms out past this; below it node text is unreadable. */
+const MIN_AUTO_ZOOM = 0.6;
+const FIT_PADDING = 0.22;
+const FIT_MAX_ZOOM = 1.05;
+/** Keeps the framed root clear of the graph toolbar. */
+const ROOT_TOP_OFFSET = 96;
 const NODE_GAP = 40;
 const CHILD_SLOT = NODE_WIDTH + NODE_GAP;
 
@@ -452,7 +459,7 @@ function computeDagrePositions(agents: Agent[], edges: AgentEdge[]) {
 }
 
 function AgentNode({ data, selected }: NodeProps<AgentFlowNode>) {
-  const { agent, pulse, arrived } = data;
+  const { agent, pulse, arrived, onOpenTrace } = data;
   const status = STATUS_META[agent.status];
   const StatusIcon = status.icon;
   const displayName = agent.nickname || agent.role || (agent.type === 'main' ? 'Main agent' : 'Subagent');
@@ -473,7 +480,16 @@ function AgentNode({ data, selected }: NodeProps<AgentFlowNode>) {
       <div className="agent-node__shine" />
       <header className="agent-node__header">
         <div className="agent-node__kind">{agent.harness.toUpperCase()}</div>
-        <div className="agent-node__status" style={{ color: status.color }}><StatusIcon size={13} className={agent.status === 'starting' ? 'spin' : ''} />{status.label}</div>
+        <div className="agent-node__header-end">
+          <div className="agent-node__status" style={{ color: status.color }}><StatusIcon size={13} className={agent.status === 'starting' ? 'spin' : ''} />{status.label}</div>
+          {onOpenTrace && <button
+            type="button"
+            className="agent-node__open nodrag nopan"
+            title="Open trace in tab"
+            aria-label={`Open ${displayName} trace in tab`}
+            onClick={(event) => { event.stopPropagation(); onOpenTrace(agent); }}
+          ><SquareArrowOutUpRight size={12} /></button>}
+        </div>
       </header>
       <div className="agent-node__identity">
         <div className="agent-node__name">{displayName}</div>
@@ -519,10 +535,12 @@ type AgentGraphProps = {
   edges: AgentEdge[];
   selectedAgentId: string | null;
   onSelectAgent: (agentId: string) => void;
+  onOpenTrace?: (agent: Agent) => void;
 };
 
-function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent }: AgentGraphProps) {
-  const { fitView, setCenter, getNodes } = useReactFlow();
+function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent, onOpenTrace }: AgentGraphProps) {
+  const { fitView, setCenter, setViewport, getNodes, getViewport } = useReactFlow();
+  const shellRef = useRef<HTMLDivElement>(null);
   const [layoutNonce, setLayoutNonce] = useState(0);
   const [positionRevision, setPositionRevision] = useState(0);
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
@@ -538,7 +556,40 @@ function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent }: Ag
   const visibleAgents = useMemo(() => agents.filter((agent) => !runId || agent.runId === runId), [agents, runId]);
   const visibleIds = useMemo(() => new Set(visibleAgents.map((agent) => agent.id)), [visibleAgents]);
   const visibleEdges = useMemo(() => edges.filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target)), [edges, visibleIds]);
-  const fitGraph = useCallback(() => void fitView({ padding: 0.22, maxZoom: 1.05, duration: 550 }), [fitView]);
+  const visibleAgentsRef = useRef(visibleAgents);
+  visibleAgentsRef.current = visibleAgents;
+  const fitGraph = useCallback(() => void fitView({ padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: 550 }), [fitView]);
+
+  /**
+   * Automatic framing: fit the whole graph while it stays readable. Larger
+   * graphs keep a readable zoom and show the root (or the focused agent).
+   */
+  const frameGraph = useCallback((focusId?: string | null) => {
+    const graphNodes = getNodes();
+    const shell = shellRef.current;
+    if (!graphNodes.length || !shell) return;
+    const xs = graphNodes.map((node) => node.position.x);
+    const ys = graphNodes.map((node) => node.position.y);
+    const width = Math.max(...graphNodes.map((node) => node.position.x + (node.measured?.width ?? NODE_WIDTH))) - Math.min(...xs);
+    const height = Math.max(...graphNodes.map((node) => node.position.y + (node.measured?.height ?? NODE_HEIGHT))) - Math.min(...ys);
+    const scale = 1 + FIT_PADDING * 2;
+    const fitZoom = Math.min(shell.clientWidth / (width * scale), shell.clientHeight / (height * scale), FIT_MAX_ZOOM);
+    if (fitZoom >= MIN_AUTO_ZOOM) return fitGraph();
+    const zoom = Math.max(MIN_AUTO_ZOOM, Math.min(getViewport().zoom, FIT_MAX_ZOOM));
+    const focus = focusId ? graphNodes.find((node) => node.id === focusId) : undefined;
+    if (focus) {
+      void setCenter(focus.position.x + NODE_WIDTH / 2, focus.position.y + NODE_HEIGHT / 2, { zoom, duration: 550 });
+      return;
+    }
+    const agentsInView = visibleAgentsRef.current;
+    const rootAgent = agentsInView.find((agent) => agent.type === 'main') ?? agentsInView.find((agent) => !agent.parentId);
+    const root = graphNodes.find((node) => node.id === rootAgent?.id) ?? graphNodes[0];
+    void setViewport({
+      x: shell.clientWidth / 2 - (root.position.x + NODE_WIDTH / 2) * MIN_AUTO_ZOOM,
+      y: ROOT_TOP_OFFSET - root.position.y * MIN_AUTO_ZOOM,
+      zoom: MIN_AUTO_ZOOM,
+    }, { duration: 550 });
+  }, [fitGraph, getNodes, getViewport, setCenter, setViewport]);
 
   useEffect(() => {
     const newAgents = visibleAgents.filter((agent) => !knownAgentIdsRef.current.has(agent.id));
@@ -598,6 +649,7 @@ function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent }: Ag
           agent,
           arrived: !knownAgentIdsRef.current.has(agent.id),
           pulse: pulseIds.has(agent.id),
+          onOpenTrace,
         },
         selected: agent.id === selectedAgentId,
         draggable: true,
@@ -611,28 +663,28 @@ function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent }: Ag
       data: { status: edge.status, active: edge.status === 'active' || edge.status === 'starting' },
     }));
     return { nodes: flowNodes, flowEdges };
-  }, [layoutNonce, positionRevision, pulseIds, runId, selectedAgentId, visibleAgents, visibleEdges, visibleIds]);
+  }, [layoutNonce, onOpenTrace, positionRevision, pulseIds, runId, selectedAgentId, visibleAgents, visibleEdges, visibleIds]);
 
   useEffect(() => {
     if (!visibleAgents.length) return;
-    const timer = window.setTimeout(fitGraph, 100);
+    const timer = window.setTimeout(() => frameGraph(), 100);
     return () => window.clearTimeout(timer);
-  }, [fitGraph, runId]);
+  }, [frameGraph, runId]);
 
   useEffect(() => {
     const previousIds = previousVisibleIdsRef.current;
     const receivedNewAgent = visibleAgents.some((agent) => !previousIds.has(agent.id));
     previousVisibleIdsRef.current = visibleIds;
     if (!receivedNewAgent || !previousIds.size || userMovedViewportRef.current) return;
-    const timer = window.setTimeout(fitGraph, 100);
+    const timer = window.setTimeout(() => frameGraph(), 100);
     return () => window.clearTimeout(timer);
-  }, [fitGraph, visibleAgents, visibleIds]);
+  }, [frameGraph, visibleAgents, visibleIds]);
 
   useEffect(() => {
     if (!selectedAgentId || !visibleAgents.length) return;
-    const timer = window.setTimeout(fitGraph, 160);
+    const timer = window.setTimeout(() => frameGraph(selectedAgentId), 160);
     return () => window.clearTimeout(timer);
-  }, [fitGraph, selectedAgentId, visibleAgents.length]);
+  }, [frameGraph, selectedAgentId, visibleAgents.length]);
 
   const onNodesChange = useCallback((changes: NodeChange<AgentFlowNode>[]) => {
     let changed = false;
@@ -668,14 +720,12 @@ function AgentGraph({ runId, agents, edges, selectedAgentId, onSelectAgent }: Ag
   const onNodeClick = useCallback((_: React.MouseEvent, node: AgentFlowNode) => onSelectAgent(node.id), [onSelectAgent]);
 
   return (
-    <div className="graph-shell">
+    <div className="graph-shell" ref={shellRef}>
       <ReactFlow
         nodes={nodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.22, maxZoom: 1.05 }}
         minZoom={0.18}
         maxZoom={1.7}
         nodesConnectable={false}
@@ -882,6 +932,9 @@ function App() {
     setTraceTabs(tabs => tabs.some(tab => tab.id === agent.id) ? tabs : [...tabs, agent]);
     setActiveTraceId(agent.id);
   }, []);
+  const openTraces = useCallback((agentsToOpen: Agent[]) => {
+    setTraceTabs(tabs => [...tabs, ...agentsToOpen.filter(agent => !tabs.some(tab => tab.id === agent.id))]);
+  }, []);
   const closeTrace = (id: string) => {
     setTraceTabs(tabs => tabs.filter(tab => tab.id !== id));
     if (activeTraceId === id) setActiveTraceId(null);
@@ -1008,12 +1061,12 @@ function App() {
         {monitorHasErrors && <div className="monitor-error-strip" role="status"><TriangleAlert size={14} /><span><strong>Monitor issue{sourceSnapshot.errors.length === 1 ? '' : 's'}:</strong> {sourceSnapshot.errors[0]}</span>{sourceSnapshot.errors.length > 1 && <span className="monitor-error-strip__count">+{sourceSnapshot.errors.length - 1} more</span>}</div>}
         <div className="workspace__body">
           <section className={`canvas-panel ${selectedAgent ? 'canvas-panel--with-details' : ''}`}>
-            {hasGraph ? <AgentGraph runId={selectedRun?.id} agents={runAgents} edges={runEdges} selectedAgentId={selectedAgentId} onSelectAgent={selectAgent} /> : <EmptyGraph mode={mode} selectedRun={selectedRun} loading={Boolean(loadingRunId && loadingRunId === selectedRun?.id)} loadError={selectedRun?.id === selectedRunId ? runLoadError : undefined} onDemo={handleDemo} onRetry={selectedRun ? () => handleRunSelect(selectedRun.id) : undefined} />}
+            {hasGraph ? <AgentGraph runId={selectedRun?.id} agents={runAgents} edges={runEdges} selectedAgentId={selectedAgentId} onSelectAgent={selectAgent} onOpenTrace={openTrace} /> : <EmptyGraph mode={mode} selectedRun={selectedRun} loading={Boolean(loadingRunId && loadingRunId === selectedRun?.id)} loadError={selectedRun?.id === selectedRunId ? runLoadError : undefined} onDemo={handleDemo} onRetry={selectedRun ? () => handleRunSelect(selectedRun.id) : undefined} />}
           </section>
           {selectedAgent && <AgentDetails agent={selectedAgent} onClose={() => selectAgent(null)} onExpand={openTrace} mode={mode} />}
         </div>
         </div>
-        {expandedAgent && <div id="expanded-trace-panel" role="tabpanel" aria-label="Expanded trace" className="workspace-trace-panel"><TraceWorkspace key={expandedAgent.id} agent={expandedAgent} demo={usingDemo} /></div>}
+        {expandedAgent && <div id="expanded-trace-panel" role="tabpanel" aria-label="Expanded trace" className="workspace-trace-panel"><TraceWorkspace key={expandedAgent.id} agent={expandedAgent} agents={agents.filter(agent => agent.runId === expandedAgent.runId)} onOpenAgent={openTrace} onOpenAgents={openTraces} demo={usingDemo} /></div>}
       </main>
     </div>
   );
