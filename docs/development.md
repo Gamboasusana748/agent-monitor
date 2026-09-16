@@ -1,0 +1,32 @@
+# Development
+
+```sh
+npm test
+npm run typecheck
+npm run build
+```
+
+- `src/main/`: Electron lifecycle, IPC bridge, filesystem monitor.
+- `src/traces/`: provider adapters and normalization.
+- `src/graph/`: agent relationship and run derivation.
+- `src/shared/`: provider-independent contracts.
+- `src/renderer/`: React Flow dashboard, details, trace viewer, Zustand state.
+
+Renderer edits reload during `npm run dev`. Restart that command after changing main-process or preload code. Build outputs are `dist/` and `dist-electron/`; this repository does not yet produce signed installers.
+
+Trace detection and normalization follow the concepts in the neighboring `jsonl-viewer` project. The Electron bridge follows the [context isolation guidance](https://www.electronjs.org/docs/latest/tutorial/context-isolation).
+
+## Memory bounds
+
+Only the selected run has parsed trace bodies in memory. Its live detail view retains the latest 200 normalized entries per agent, with individual displayed entries capped at 64 KiB. JSONL metrics are folded across the entire selected file even when older display entries are discarded. Hermes database metrics come from its stored session counters; its reader queries only the latest 200 message rows per selected agent. Original trace files remain unchanged. Oversized malformed lines are skipped so a partial write cannot grow an unbounded buffer.
+
+`npm run test:smoke` builds the application and runs the Electron acceptance scenario with temporary synthetic sessions. It requires a desktop session and verifies explicit run selection, live nodes and edges, details, completion, and switching runs.
+
+## Production build
+
+```sh
+npm run build
+npm start
+```
+
+`npm run dev:web` provides a browser-only demo; local trace discovery requires Electron.
