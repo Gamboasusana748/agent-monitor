@@ -15,8 +15,8 @@ const monitor = new MultiSourceMonitor([
   fileMonitor,
 ]);
 const developmentUrl = process.env.VITE_DEV_SERVER_URL;
-// Resolved from dist-electron/; the source artwork lives in build/ (icon.icns and icon.ico sit beside it).
-const iconPath = path.join(__dirname, '../build/icon.png');
+// Packaged apps ship the icon as an extra resource; development reads it from build/ (icon.icns and icon.ico sit beside it).
+const iconPath = app.isPackaged ? path.join(process.resourcesPath, 'icon.png') : path.join(__dirname, '../build/icon.png');
 function assertSender(event: Electron.IpcMainInvokeEvent) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender');
 }
@@ -53,8 +53,8 @@ else {
       return monitor.loadRun(runId);
     });
     monitor.on('snapshot', snapshot => { if (window && !window.webContents.isDestroyed()) window.webContents.send('monitor:changed', snapshot); });
-    // Unpackaged macOS runs show Electron's own Dock icon unless it is replaced.
-    if (process.platform === 'darwin') app.dock?.setIcon(iconPath);
+    // Unpackaged macOS runs show Electron's own Dock icon unless it is replaced; packaged apps use the bundle icon.
+    if (process.platform === 'darwin' && !app.isPackaged) app.dock?.setIcon(iconPath);
     createWindow();
     void monitor.start().catch(error => { console.error('Trace monitor failed:', error); });
     app.on('activate', () => { if (!window) createWindow(); });

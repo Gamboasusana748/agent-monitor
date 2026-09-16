@@ -1,0 +1,48 @@
+appId: com.donvito.agentmonitor
+productName: Agent Monitor
+copyright: Copyright © 2026 Melvin Vivas
+
+directories:
+  # Vite already writes the renderer to dist/.
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+  - "!**/*.map"
+
+# The main process loads this at runtime for the window icon.
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+
+artifactName: "${name}-${version}-${os}-${arch}.${ext}"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  # No Developer ID certificate: ad-hoc sign so Apple Silicon does not report the app as damaged.
+  identity: "-"
+  # Hardened runtime only matters for notarization and breaks ad-hoc signed launches.
+  hardenedRuntime: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  category: Development
+  target:
+    - target: AppImage
+      arch: [x64]

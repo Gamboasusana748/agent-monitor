@@ -2,7 +2,9 @@
   "name": "agent-monitor",
   "version": "0.1.0",
   "private": true,
-  "description": "Local live observability for Codex agent trees",
+  "description": "Local dashboard for Codex, Claude Code, Pi, and Hermes agent traces",
+  "author": "Melvin Vivas",
+  "homepage": "https://github.com/donvito/agent-monitor",
   "type": "module",
   "main": "dist-electron/index.cjs",
   "scripts": {
@@ -14,21 +16,14 @@
     "start": "electron .",
     "test": "tsx --test tests/*.test.ts",
     "test:smoke": "npm run build && node scripts/smoke.mjs",
+    "dist": "npm run build && electron-builder --publish never",
     "screenshots": "npm run build && node scripts/screenshots.mjs"
   },
   "engines": {
     "node": ">=22.12"
   },
-  "dependencies": {
-    "@dagrejs/dagre": "^3.1.1",
-    "@xyflow/react": "^12.11.6",
-    "chokidar": "^5.0.0",
-    "lucide-react": "^1.46.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "zustand": "^5.0.15"
-  },
   "devDependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/dagre": "^0.7.54",
@@ -36,14 +31,21 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "@xyflow/react": "^12.11.6",
+    "chokidar": "^5.0.0",
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
     "electron": "^44.4.1",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
+    "lucide-react": "^1.46.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
-    "wait-on": "^9.1.0"
+    "wait-on": "^9.1.0",
+    "zustand": "^5.0.15"
   }
 }

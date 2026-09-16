@@ -12,7 +12,7 @@ npm run build
 - `src/shared/`: provider-independent contracts.
 - `src/renderer/`: React Flow dashboard, details, trace viewer, Zustand state.
 
-Renderer edits reload during `npm run dev`. The dev server prefers port 5173 and moves to the next free port when it is taken; Electron always opens the port Vite actually bound (`scripts/dev.mjs`). Extra arguments pass to Electron, e.g. `npm run dev -- --inspect`. Restart that command after changing main-process or preload code. Build outputs are `dist/` and `dist-electron/`; this repository does not yet produce signed installers.
+Renderer edits reload during `npm run dev`. The dev server prefers port 5173 and moves to the next free port when it is taken; Electron always opens the port Vite actually bound (`scripts/dev.mjs`). Extra arguments pass to Electron, e.g. `npm run dev -- --inspect`. Restart that command after changing main-process or preload code. Build outputs are `dist/` and `dist-electron/`.
 
 Trace detection and normalization follow the concepts in the neighboring `jsonl-viewer` project. The Electron bridge follows the [context isolation guidance](https://www.electronjs.org/docs/latest/tutorial/context-isolation).
 
@@ -34,3 +34,9 @@ npm start
 ```
 
 `npm run dev:web` provides a browser-only demo; local trace discovery requires Electron.
+
+## Packaging and releases
+
+`npm run dist` packages installers for the current platform into `release/` using `electron-builder.yml` (macOS `.dmg`/`.zip`, Windows NSIS `.exe`, Linux `.AppImage`). Builds are unsigned; macOS builds are ad-hoc signed so Apple Silicon can open them.
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which packages on macOS, Windows, and Linux runners and publishes a GitHub release with `.github/release-notes.md`. Bump `version` in `package.json` before tagging.

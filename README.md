@@ -4,7 +4,11 @@ A local dashboard for **Codex, Claude Code, Pi, and Hermes**. Explore agent tree
 
 ![Agent graph](docs/images/agent-graph.png)
 
-## Run
+## Download
+
+Get the latest macOS, Windows, and Linux builds from [Releases](https://github.com/donvito/agent-monitor/releases). The builds are not code-signed yet; the release notes explain how to open them.
+
+## Run from source
 
 Requires **Node.js 22.12+** and npm.
 
