@@ -26,6 +26,8 @@ Default sources:
 | Pi | `$PI_CODING_AGENT_DIR/sessions` or `~/.pi/agent/sessions` |
 | Hermes | `$HERMES_HOME/state.db`, `session-exports/traces`, and `sessions`, defaulting to `~/.hermes` |
 
+## Token breakdown
+
 ![Token usage and cost breakdown](docs/images/token-usage.png)
 
 *Screenshots use synthetic demo sessions.*
