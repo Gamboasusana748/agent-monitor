@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Select a run from the sidebar to load its agents. Click an agent to inspect its trace, or the token totals for usage details.
+Select a run from the sidebar to load its agents. Click an agent to inspect its trace, or use the icon on its node to open the trace in a tab. Click **Details** next to the token totals for the full breakdown.
 
 Default sources:
 
@@ -26,9 +26,21 @@ Default sources:
 | Pi | `$PI_CODING_AGENT_DIR/sessions` or `~/.pi/agent/sessions` |
 | Hermes | `$HERMES_HOME/state.db`, `session-exports/traces`, and `sessions`, defaulting to `~/.hermes` |
 
+## Trace view
+
+Open any agent in a tab to read its conversation, tool calls, and results, with links to its parent and subagents.
+
+![Trace view](docs/images/trace-view.png)
+
 ## Token breakdown
 
+Token totals and estimated API cost per agent, with usage charts over time.
+
 ![Token usage and cost breakdown](docs/images/token-usage.png)
+
+Switch to **By model** to see tokens and cost grouped by model.
+
+![Token usage and cost by model](docs/images/token-usage-by-model.png)
 
 *Screenshots use synthetic demo sessions.*
 
