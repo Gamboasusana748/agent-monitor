@@ -1,0 +1,49 @@
+# Dependencies and generated output
+node_modules/
+dist/
+dist-electron/
+coverage/
+*.tsbuildinfo
+
+# Local agent/editor configuration
+/.agents/
+/.codex/
+/AGENTS.md
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets and machine-local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Never commit real agent traces, session exports, or databases
+*.jsonl
+*.jsonl.*
+*.ndjson
+*.ndjson.*
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+/traces/
+/sessions/
+/session-exports/
+/logs/
+*.log
+
+# Local screenshots, test artifacts, and temporary files
+/screenshots/
+/artifacts/
+/test-results/
+/playwright-report/
+/tmp/
+*.tmp
+*.swp

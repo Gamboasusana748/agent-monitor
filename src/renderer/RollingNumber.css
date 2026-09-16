@@ -1,0 +1,6 @@
+.rolling-number { display:inline-block; font-variant-numeric:tabular-nums; white-space:nowrap; vertical-align:bottom; }
+.rolling-number__place { display:inline-block; height:1.2em; line-height:1.2; overflow:hidden; vertical-align:bottom; }
+.rolling-number__reel { display:flex; flex-direction:column; transform:translateY(var(--reel-end)); animation:token-roll 750ms cubic-bezier(.15,.65,.15,1) var(--reel-delay) both; }
+.rolling-number__reel > span { height:1.2em; flex-shrink:0; }
+@keyframes token-roll { from { transform:translateY(0); filter:blur(.6px); } 75% { filter:blur(0); } to { transform:translateY(var(--reel-end)); filter:blur(0); } }
+@media (prefers-reduced-motion:reduce) { .rolling-number__reel { animation:none; } }

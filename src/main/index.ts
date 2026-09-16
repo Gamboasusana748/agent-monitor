@@ -1,0 +1,61 @@
+import { app, BrowserWindow, ipcMain } from 'electron';
+import path from 'node:path';
+import { TraceMonitor } from './trace-monitor/TraceMonitor';
+import { HermesMonitor } from './trace-monitor/HermesMonitor';
+import { MultiSourceMonitor } from './trace-monitor/MultiSourceMonitor';
+
+let window: BrowserWindow | null = null;
+const idle = Number(process.env.AGENT_MONITOR_IDLE_MS);
+const fileMonitor = new TraceMonitor({
+  ...(process.env.AGENT_MONITOR_TRACE_ROOT ? {roots: [path.resolve(process.env.AGENT_MONITOR_TRACE_ROOT)]} : {}),
+  ...(Number.isFinite(idle) && idle > 0 ? {idleMs: idle} : {}),
+});
+const monitor = new MultiSourceMonitor([
+  ...(process.env.AGENT_MONITOR_TRACE_ROOT ? [] : [new HermesMonitor(Number.isFinite(idle) && idle > 0 ? {idleMs:idle} : {})]),
+  fileMonitor,
+]);
+const developmentUrl = process.env.VITE_DEV_SERVER_URL;
+function assertSender(event: Electron.IpcMainInvokeEvent) {
+  if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender');
+}
+function createWindow() {
+  window = new BrowserWindow({ show: false, width: 1500, height: 950, minWidth: 960, minHeight: 640, backgroundColor: '#0c1016', title: 'Agent Monitor', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  window.once('ready-to-show', () => { window?.show(); window?.maximize(); });
+  window.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
+  window.webContents.on('will-navigate', event => event.preventDefault());
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  window.on('closed', () => { window = null; });
+  if (developmentUrl) {
+    const parsed = new URL(developmentUrl);
+    if (parsed.origin !== 'http://127.0.0.1:5173') throw new Error('Unexpected development server URL');
+    void window.loadURL(developmentUrl);
+  } else void window.loadFile(path.join(__dirname, '../dist/index.html'));
+}
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.on('second-instance', () => { if (window?.isMinimized()) window.restore(); window?.focus(); });
+  void app.whenReady().then(() => {
+    ipcMain.handle('monitor:snapshot', event => { assertSender(event); return monitor.snapshot(); });
+    ipcMain.handle('monitor:trace', (event, agentId: unknown) => {
+      assertSender(event);
+      if (typeof agentId !== 'string' || agentId.length > 1024) throw new Error('Invalid agent identifier');
+      return monitor.getTrace(agentId);
+    });
+    ipcMain.handle('monitor:load-run', (event, runId: unknown) => {
+      assertSender(event);
+      if (typeof runId !== 'string' || !runId || runId.length > 1024) throw new Error('Invalid run identifier');
+      return monitor.loadRun(runId);
+    });
+    monitor.on('snapshot', snapshot => { if (window && !window.webContents.isDestroyed()) window.webContents.send('monitor:changed', snapshot); });
+    createWindow();
+    void monitor.start().catch(error => { console.error('Trace monitor failed:', error); });
+    app.on('activate', () => { if (!window) createWindow(); });
+  });
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+  let stopping = false;
+  app.on('before-quit', event => {
+    if (stopping) return;
+    event.preventDefault(); stopping = true;
+    void monitor.stop().finally(() => app.quit());
+  });
+}

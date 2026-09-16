@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { estimateAgentCost } from '../src/shared/pricing';
+import type { Agent,ModelTokenUsage } from '../src/shared/types';
+const agent=(usage:ModelTokenUsage[]):Agent=>({id:'a',runId:'a',parentId:null,harness:'codex',type:'main',status:'active',tokenUsage:usage,stats:{inputTokens:usage.reduce((n,u)=>n+u.inputTokens,0),outputTokens:usage.reduce((n,u)=>n+u.outputTokens,0),toolCalls:0,errors:0}});
+const sample:ModelTokenUsage={model:'gpt-6-astra',inputTokens:100000,outputTokens:10000,cacheReadTokens:80000,cacheWriteTokens:0,requestInputTokens:100000};
+test('API prices count cached input once and reasoning is already in output',()=>{assert.equal(estimateAgentCost(agent([sample])).usd,.78);});
+test('mixed-model usage uses each model rate',()=>{assert.equal(estimateAgentCost(agent([sample,{...sample,model:'gpt-5.6-luna'}])).usd,.7976);});
+test('unknown aliases retain known subtotal without pretending zero cost',()=>{const result=estimateAgentCost(agent([sample,{...sample,model:'codex-auto-review'}]));assert.equal(result.usd,null);assert.equal(result.knownUsd,.78);assert.equal(result.unpricedTokens,110000);});
+test('long context uses the entire request and known tier',()=>{const result=estimateAgentCost(agent([{...sample,inputTokens:300000,requestInputTokens:300000,serviceTier:'priority'}]));assert.equal(result.usd,10.62);});
+test('missing context and missing cache information are unknown',()=>{assert.equal(estimateAgentCost(agent([{...sample,inputTokens:300000,requestInputTokens:undefined}])).usd,null);assert.equal(estimateAgentCost(agent([{...sample,cacheReadTokens:undefined}])).usd,null);});
+test('Anthropic cache writes require TTL split and use distinct rates',()=>{const usage={...sample,model:'claude-sonnet-5',cacheReadTokens:50000,cacheWriteTokens:20000,cacheWrite5mTokens:10000,cacheWrite1hTokens:10000};assert.equal(estimateAgentCost(agent([usage])).usd,.235);assert.equal(estimateAgentCost(agent([{...usage,cacheWrite1hTokens:undefined}])).usd,null);});
+test('unattributed and excessive buckets do not yield full prices',()=>{const a=agent([sample]);a.stats.inputTokens++;assert.equal(estimateAgentCost(a).complete,false);a.stats.inputTokens-=2;assert.equal(estimateAgentCost(a).knownUsd,0);});
