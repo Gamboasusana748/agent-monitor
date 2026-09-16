@@ -17,6 +17,15 @@ npm run dev
 
 Select a run from the sidebar to load its agents. Click an agent to inspect its trace, or the token totals for usage details.
 
+Default sources:
+
+| Provider | Local source |
+| --- | --- |
+| Codex | `$CODEX_HOME/sessions` or `~/.codex/sessions` |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects` or `~/.claude/projects` |
+| Pi | `$PI_CODING_AGENT_DIR/sessions` or `~/.pi/agent/sessions` |
+| Hermes | `$HERMES_HOME/state.db`, `session-exports/traces`, and `sessions`, defaulting to `~/.hermes` |
+
 ![Token usage and cost breakdown](docs/images/token-usage.png)
 
 *Screenshots use synthetic demo sessions.*
