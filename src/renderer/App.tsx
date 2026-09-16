@@ -883,7 +883,7 @@ function Sidebar({ runs, agents, selectedRunId, loadedRunId, runTokenSummaries, 
   const watcherSubtitle = usingDemo ? 'sample data loaded' : errors.length ? `${errors.length} monitor issue${errors.length === 1 ? '' : 's'}` : watching ? 'listening locally' : 'monitor connected';
   return (
     <aside className="sidebar">
-      <div className="brand"><div><div className="brand__name">Agent Monitor</div><div className="brand__sub">local observability</div></div></div>
+      <div className="brand"><div className="brand__name">Agent Monitor</div></div>
       <div className="sidebar__nav"><button type="button" className="sidebar-link sidebar-link--active">Overview<span className="sidebar-link__shortcut">⌘ 1</span></button><button type="button" className="sidebar-link">Agent topology<span className="sidebar-link__count">{agents.length}</span></button></div>
       <div className="sidebar__section">
         <div className="sidebar__section-head"><span>Recent runs</span><span className="sidebar__section-count">{runs.length}</span></div>

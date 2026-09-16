@@ -7,6 +7,8 @@ import '@xyflow/react/dist/style.css';
 import './styles.css';
 
 applyTheme(readTheme());
+// The macOS window uses an inset title bar; the app header becomes the drag area.
+if (window.agentMonitor?.platform === 'darwin') document.documentElement.classList.add('mac-titlebar');
 
 const root = document.getElementById('root');
 

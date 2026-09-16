@@ -15,11 +15,16 @@ const monitor = new MultiSourceMonitor([
   fileMonitor,
 ]);
 const developmentUrl = process.env.VITE_DEV_SERVER_URL;
+// Resolved from dist-electron/; the source artwork lives in build/ (icon.icns and icon.ico sit beside it).
+const iconPath = path.join(__dirname, '../build/icon.png');
 function assertSender(event: Electron.IpcMainInvokeEvent) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender');
 }
 function createWindow() {
-  window = new BrowserWindow({ show: false, width: 1500, height: 950, minWidth: 960, minHeight: 640, backgroundColor: '#0c1016', title: 'Agent Monitor', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  window = new BrowserWindow({ show: false, width: 1500, height: 950, minWidth: 960, minHeight: 640, backgroundColor: '#0c1016', title: 'Agent Monitor', icon: iconPath,
+    // macOS: draw the window controls over the app's own header instead of a separate light title bar.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 20, y: 21 } } : {}),
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   window.once('ready-to-show', () => { window?.show(); window?.maximize(); });
   window.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   window.webContents.on('will-navigate', event => event.preventDefault());
@@ -48,6 +53,8 @@ else {
       return monitor.loadRun(runId);
     });
     monitor.on('snapshot', snapshot => { if (window && !window.webContents.isDestroyed()) window.webContents.send('monitor:changed', snapshot); });
+    // Unpackaged macOS runs show Electron's own Dock icon unless it is replaced.
+    if (process.platform === 'darwin') app.dock?.setIcon(iconPath);
     createWindow();
     void monitor.start().catch(error => { console.error('Trace monitor failed:', error); });
     app.on('activate', () => { if (!window) createWindow(); });

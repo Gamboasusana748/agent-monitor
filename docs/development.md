@@ -20,6 +20,8 @@ Trace detection and normalization follow the concepts in the neighboring `jsonl-
 
 Only the selected run has parsed trace bodies in memory. Its live detail view retains the latest 200 normalized entries per agent, with individual displayed entries capped at 64 KiB. JSONL metrics are folded across the entire selected file even when older display entries are discarded. Hermes database metrics come from its stored session counters; its reader queries only the latest 200 message rows per selected agent. Original trace files remain unchanged. Oversized malformed lines are skipped so a partial write cannot grow an unbounded buffer.
 
+The app icon lives in `build/`: `icon.png` (1024 px, used for the window and the macOS Dock during development), `icon.icns` for macOS, and `icon.ico` for Windows.
+
 `npm run screenshots` rebuilds the app and regenerates the README images in `docs/images/` from synthetic sessions.
 
 `npm run test:smoke` builds the application and runs the Electron acceptance scenario with temporary synthetic sessions. It requires a desktop session and verifies explicit run selection, live nodes and edges, details, completion, and switching runs.
