@@ -27,7 +27,8 @@ function createWindow() {
   window.on('closed', () => { window = null; });
   if (developmentUrl) {
     const parsed = new URL(developmentUrl);
-    if (parsed.origin !== 'http://127.0.0.1:5173') throw new Error('Unexpected development server URL');
+    // scripts/dev.mjs may bind any free port; only a loopback Vite server in an unpackaged app is trusted.
+    if (app.isPackaged || parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || !parsed.port) throw new Error('Unexpected development server URL');
     void window.loadURL(developmentUrl);
   } else void window.loadFile(path.join(__dirname, '../dist/index.html'));
 }

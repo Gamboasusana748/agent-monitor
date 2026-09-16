@@ -6,14 +6,15 @@
   "type": "module",
   "main": "dist-electron/index.cjs",
   "scripts": {
-    "dev": "npm run build:main && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "dev": "npm run build:main && node scripts/dev.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "build:main": "node scripts/build-main.mjs",
     "build": "npm run typecheck && vite build && npm run build:main",
     "start": "electron .",
     "test": "tsx --test tests/*.test.ts",
-    "test:smoke": "npm run build && node scripts/smoke.mjs"
+    "test:smoke": "npm run build && node scripts/smoke.mjs",
+    "screenshots": "npm run build && node scripts/screenshots.mjs"
   },
   "engines": {
     "node": ">=22.12"
