@@ -48,6 +48,12 @@ interface InventoryEntry {
   identity?: string;
 }
 
+interface FileSignature {
+  size: number;
+  mtimeMs: number;
+  identity?: string;
+}
+
 interface HeaderProbe {
   records: TraceRecord[];
   session?: ProviderSession;
@@ -229,6 +235,7 @@ export class TraceMonitor extends EventEmitter {
   private readonly files = new Map<string, FileState>();
   private readonly inventory = new Map<string, InventoryEntry>();
   private readonly queues = new Map<string, Promise<void>>();
+  private readonly observedSignatures = new Map<string, FileSignature>();
   private readonly traces = new Map<string, TraceEntry[]>();
   private readonly errors: string[] = [];
   private watcher?: FSWatcher;
@@ -320,6 +327,28 @@ export class TraceMonitor extends EventEmitter {
     watcher.on('unlink', (filePath) => {
       if (isTraceFile(filePath)) void this.enqueueDelete(filePath);
     });
+    if (process.platform === 'win32') {
+      // Windows writers can keep mtime unchanged until closing their handle.
+      // Chokidar filters these changes when atime is newer, even if size grew.
+      // Its raw notification still arrives; reconcile it through the same queue.
+      watcher.on('raw', (event, filePath, details: unknown) => {
+        if (event !== 'change' || !this.started || this.watcher !== watcher) return;
+        const watchedPath = objectValue(details)?.watchedPath;
+        let candidate: string | undefined;
+        if (typeof filePath === 'string' && path.isAbsolute(filePath)) candidate = filePath;
+        else if (typeof watchedPath === 'string' && path.isAbsolute(watchedPath)) {
+          if (isTraceFile(watchedPath)) candidate = watchedPath;
+          else if (typeof filePath === 'string') candidate = path.join(watchedPath, filePath);
+        }
+        if (!candidate || !isTraceFile(candidate)) return;
+        const normalized = path.resolve(candidate);
+        if (!this.roots.some(root => {
+          const relative = path.relative(root, normalized);
+          return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+        })) return;
+        void this.enqueueObserved(normalized);
+      });
+    }
     // The ready/error wait below owns EMFILE fallback. Other errors are
     // surfaced immediately while the watcher remains usable if possible.
     watcher.on('error', (error) => {
@@ -353,6 +382,7 @@ export class TraceMonitor extends EventEmitter {
       }
     }
     await Promise.allSettled(Array.from(this.queues.values()));
+    this.observedSignatures.clear();
     this.currentSnapshot = { ...this.currentSnapshot, watching: false };
     this.publishSnapshot();
     this.startPromise = undefined;
@@ -461,16 +491,42 @@ export class TraceMonitor extends EventEmitter {
 
   private enqueueObserved(filePath: string): Promise<void> {
     return this.enqueueOperation(filePath, async () => {
+      if (!this.started) return;
       const normalized = path.resolve(filePath);
-      const generation = this.selectionGeneration;
-      if (this.files.has(normalized)) {
-        await this.processFile(normalized, true, generation);
-        return;
+      let stat;
+      try {
+        stat = await fs.stat(normalized);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+          await this.removeFile(normalized);
+          return;
+        }
+        throw error;
       }
-      await this.processInventory(normalized, true);
-      const entry = this.inventory.get(normalized);
-      if (entry && this.selectedRunId && entry.agent.runId === this.selectedRunId) {
-        await this.processFile(normalized, true, this.selectionGeneration);
+      if (!stat.isFile()) return;
+      const signature = { size: stat.size, mtimeMs: stat.mtimeMs, identity: statIdentity(stat) };
+      const loaded = this.files.get(normalized);
+      const previous = this.observedSignatures.get(normalized)
+        ?? (loaded ? { size: loaded.offset, mtimeMs: loaded.mtimeMs, identity: loaded.identity } : this.inventory.get(normalized));
+      // De-duplicate normal/raw events, including access-time-only notifications.
+      // Remember incomplete headers too, so reading them cannot cause a loop.
+      if (previous && previous.size === signature.size && previous.mtimeMs === signature.mtimeMs && previous.identity === signature.identity) return;
+      this.observedSignatures.set(normalized, signature);
+      const generation = this.selectionGeneration;
+      try {
+        if (this.files.has(normalized)) {
+          await this.processFile(normalized, true, generation);
+          return;
+        }
+        await this.processInventory(normalized, true);
+        const entry = this.inventory.get(normalized);
+        if (entry && this.selectedRunId && entry.agent.runId === this.selectedRunId) {
+          await this.processFile(normalized, true, this.selectionGeneration);
+        }
+      } catch (error) {
+        this.observedSignatures.delete(normalized);
+        throw error;
       }
     }, true);
   }
@@ -521,7 +577,7 @@ export class TraceMonitor extends EventEmitter {
     const previous = this.inventory.get(normalized);
     if (previous && previous.identity === identity && previous.size === stat.size) {
       previous.mtimeMs = stat.mtimeMs;
-      previous.agent.lastActivityAt = stat.mtimeMs;
+      previous.agent.lastActivityAt = Math.max(previous.agent.lastActivityAt ?? 0, stat.mtimeMs);
       this.rebuildInventoryRuns();
       if (publish) this.publishSnapshot();
       return;
@@ -530,8 +586,9 @@ export class TraceMonitor extends EventEmitter {
     if (!header.records.length) return;
     const observation = inspectCanonical(header.records, { tracePath: normalized });
     if (!observation) return;
-    const agent = this.applyFreshness(observation.agent, stat.mtimeMs, false, observation);
-    agent.lastActivityAt = stat.mtimeMs;
+    const changed = previous !== undefined && (previous.size !== stat.size || previous.identity !== identity);
+    const agent = this.applyFreshness(observation.agent, stat.mtimeMs, changed, observation);
+    agent.lastActivityAt = Math.max(agent.lastActivityAt ?? 0, previous?.agent.lastActivityAt ?? 0, stat.mtimeMs);
     // Inventory metadata is intentionally compact. Full timeline/statistics
     // are recomputed by processFile after loadRun selects this run.
     agent.stats = { inputTokens: 0, outputTokens: 0, toolCalls: 0, errors: 0 };
@@ -704,6 +761,7 @@ export class TraceMonitor extends EventEmitter {
       agent: { ...agent, stats: { ...agent.stats } },
       mtimeMs: stat.mtimeMs,
       size: stat.size,
+      identity,
     });
     this.rebuildInventoryRuns();
     this.rebuildGraph();
@@ -1009,17 +1067,18 @@ export class TraceMonitor extends EventEmitter {
     if (observation.failed || observation.completed) {
       return { ...agent, stats: { ...agent.stats } };
     }
-    const fresh = changed || mtimeMs >= now - this.idleMs;
+    const lastActivityAt = changed ? now : Math.max(agent.lastActivityAt ?? 0, observation.lastTimestamp ?? 0, mtimeMs);
+    const fresh = lastActivityAt >= now - this.idleMs;
     const status = agent.status === 'starting'
       ? 'starting'
       : fresh
         ? 'active'
         : 'idle';
-    const lastActivityAt = changed ? now : agent.lastActivityAt ?? observation.lastTimestamp ?? mtimeMs;
     return { ...agent, status, lastActivityAt, stats: { ...agent.stats } };
   }
 
   private async removeFile(filePath: string, publish = true): Promise<void> {
+    this.observedSignatures.delete(filePath);
     const state = this.files.get(filePath);
     const hadInventory = this.inventory.delete(filePath);
     if (!state && !hadInventory) return;

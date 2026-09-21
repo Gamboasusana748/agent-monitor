@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const electronExecutable = process.env.ELECTRON_EXECUTABLE_PATH || require('electron');
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
-const screenshotPath = '/private/tmp/agent-monitor-smoke.png';
+const screenshotPath = path.join(os.tmpdir(), 'agent-monitor-smoke.png');
 const timeoutMs = Number(process.env.AGENT_MONITOR_SMOKE_TIMEOUT_MS) || 20_000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -111,7 +111,7 @@ async function visibleText(page, pattern, options = {}) {
 async function visibleAnyText(page, patterns) {
   return waitFor(`one of: ${patterns.join(', ')}`, async () => {
     for (const pattern of patterns) {
-      const locator = textLocator(page, pattern).first();
+      const locator = textLocator(page, pattern).filter({ visible: true }).first();
       if (await locator.isVisible().catch(() => false)) return locator;
     }
     return null;
@@ -130,6 +130,7 @@ async function runButton(page, cwdName) {
   const runName = new RegExp(escapeRegExp(cwdName), 'i');
   return waitFor(`the run selector for ${cwdName}`, async () => {
     const candidates = [
+      page.locator('button.run-item').filter({ has: page.getByTitle(runName) }).first(),
       page.locator('button.run-item').filter({ hasText: cwdName }).first(),
       page.locator('[data-testid="run-item"]').filter({ hasText: cwdName }).first(),
       page.getByRole('button', { name: runName }).first(),
@@ -230,6 +231,8 @@ async function visibleGraphEdgeCount(page) {
 }
 
 async function dragNode(page, locator, dx, dy) {
+  // Let the graph's animated initial framing settle before using screen coordinates.
+  await sleep(700);
   const before = await locator.boundingBox();
   if (!before) throw new Error('Cannot drag an agent without a visible bounding box');
   const start = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
@@ -245,6 +248,9 @@ async function dragNode(page, locator, dx, dy) {
 }
 
 async function maybeOpenTrace(page) {
+  // The details pane already contains the trace. Keep the graph visible for
+  // the following live status and run-switching assertions.
+  if (await page.locator('.details-section--trace').isVisible().catch(() => false)) return false;
   const traceButton = page.getByRole('button', { name: /open trace|view trace|trace/i }).first();
   if (await traceButton.isVisible().catch(() => false)) {
     await traceButton.click();
@@ -433,6 +439,7 @@ async function main() {
       throw new Error(`Root graph position moved after child discovery (${JSON.stringify(rootPositionBefore)} -> ${JSON.stringify(rootPositionAfter)})`);
     }
 
+    await page.getByTitle('Fit graph', { exact: true }).click();
     try {
       await waitFor('three visible React Flow spawn edges', async () => await visibleGraphEdgeCount(page) >= 3);
     } catch (error) {
